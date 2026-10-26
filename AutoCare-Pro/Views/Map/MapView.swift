@@ -5,7 +5,6 @@
 //  Created by Student4 on 2026-10-26.
 //
 
-
 import SwiftUI
 import MapKit
 import CoreLocation
@@ -33,10 +32,8 @@ struct MapView: View {
                 .padding(.vertical, 16)
             }
         }
-        .navigationTitle("Service Centers")
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbarBackground(AppColors.background, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             locationService.requestPermission()
         }
@@ -213,38 +210,30 @@ struct MapView: View {
         _ center: ServiceCenter
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button {
-                openPlaceInGoogleMaps(center)
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: center.type.icon)
-                        .font(.title3)
+
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: center.type.icon)
+                    .font(.title3)
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(center.name)
+                        .font(.headline)
+                        .foregroundStyle(AppColors.primaryText)
+                        .multilineTextAlignment(.leading)
+
+                    Text(center.distanceText)
+                        .font(AppFonts.footer)
                         .foregroundStyle(AppColors.accent)
-                        .frame(width: 28)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(center.name)
-                            .font(.headline)
-                            .foregroundStyle(AppColors.primaryText)
-                            .multilineTextAlignment(.leading)
-
-                        Text(center.distanceText)
-                            .font(AppFonts.footer)
-                            .foregroundStyle(AppColors.accent)
-
-                        Text(center.type.rawValue)
-                            .font(AppFonts.footer)
-                            .foregroundStyle(AppColors.secondaryLabel)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "arrow.up.right.square")
+                    Text(center.type.rawValue)
+                        .font(AppFonts.footer)
                         .foregroundStyle(AppColors.secondaryLabel)
                 }
-                .contentShape(Rectangle())
+
+                Spacer()
             }
-            .buttonStyle(.plain)
 
             Divider()
                 .overlay(AppColors.secondaryLabel.opacity(0.25))
@@ -253,11 +242,14 @@ struct MapView: View {
                 if let phone = center.phoneNumber,
                    let url = phoneURL(for: phone) {
 
-                    Link(destination: url) {
+                    Button {
+                        openURL(url)
+                    } label: {
                         Label("Call", systemImage: "phone.fill")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppColors.accent)
                     }
+                    .buttonStyle(.plain)
 
                 } else {
 
@@ -298,25 +290,6 @@ struct MapView: View {
         return URL(string: "tel:\(sanitizedPhone)")
     }
 
-    private func openPlaceInGoogleMaps(
-        _ center: ServiceCenter
-    ) {
-        var components = URLComponents(
-            string: "https://www.google.com/maps/search/"
-        )
-
-        let query =
-            "\(center.name) \(center.coordinate.latitude),\(center.coordinate.longitude)"
-
-        components?.queryItems = [
-            URLQueryItem(name: "api", value: "1"),
-            URLQueryItem(name: "query", value: query)
-        ]
-
-        guard let url = components?.url else { return }
-        openURL(url)
-    }
-
     private func openRouteInGoogleMaps(
         _ center: ServiceCenter
     ) {
@@ -343,4 +316,3 @@ struct MapView: View {
         MapView()
     }
 }
-
