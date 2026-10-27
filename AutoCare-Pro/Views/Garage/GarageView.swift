@@ -8,8 +8,9 @@
 import SwiftUI
 
 struct GarageView: View {
-    // State to control user settings sheet presentation
+
     @State private var showUserSettings = false
+    @State private var showAddVehicle = false
 
     var body: some View {
         ZStack {
@@ -45,11 +46,34 @@ struct GarageView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
-        // Opens User Settings as a modal sheet when profile icon is tapped
         .sheet(isPresented: $showUserSettings) {
             UserSettingsView()
         }
+        .sheet(isPresented: $showAddVehicle) {
+            NavigationStack {
+                AddVehicleView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Cancel") {
+                                showAddVehicle = false
+                            }
+                            .foregroundStyle(AppColors.secondaryLabel)
+                        }
+
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") {
+                                showAddVehicle = false
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppColors.accent)
+                        }
+                    }
+            }
+            .preferredColorScheme(.dark)
+        }
     }
+
+
 
     private var headerSection: some View {
         HStack(alignment: .top) {
@@ -65,7 +89,6 @@ struct GarageView: View {
 
             Spacer()
 
-            // Clickable User Profile Icon
             Button {
                 showUserSettings = true
             } label: {
@@ -76,6 +99,7 @@ struct GarageView: View {
             .buttonStyle(.plain)
         }
     }
+
 
     private var activeVehicleCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -105,14 +129,22 @@ struct GarageView: View {
 
                 Spacer()
 
-                Text("Face ID")
-                    .font(.caption2)
+                Button {
+                    showAddVehicle = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Vehicle")
+                    }
+                    .font(.caption)
                     .fontWeight(.bold)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.accent)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.green.opacity(0.15))
+                    .padding(.vertical, 8)
+                    .background(AppColors.buttonBackground)
                     .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
 
             ZStack(alignment: .bottomLeading) {
@@ -136,6 +168,8 @@ struct GarageView: View {
         .background(AppColors.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
+
+
 
     private var statsGridSection: some View {
         LazyVGrid(
@@ -174,6 +208,7 @@ struct GarageView: View {
         }
     }
 
+
     private var dtcAlertBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.circle.fill")
@@ -195,6 +230,7 @@ struct GarageView: View {
                 .stroke(Color.orange.opacity(0.5), lineWidth: 1)
         }
     }
+
 
     private var maintenanceExpensesCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -234,6 +270,8 @@ struct GarageView: View {
             .fill(AppColors.accent)
             .frame(width: 28, height: height)
     }
+
+
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -294,7 +332,7 @@ struct GarageView: View {
 }
 
 #Preview {
-    NavigationStack{
+    NavigationStack {
         GarageView()
     }
 }

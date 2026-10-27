@@ -41,7 +41,7 @@ struct UserSettingsView: View {
 
                         profileHeader
 
-                        // Account Details
+                   
                         VStack(alignment: .leading, spacing: 16) {
                             sectionTitle("ACCOUNT DETAILS")
 
@@ -51,7 +51,6 @@ struct UserSettingsView: View {
                                     text: $name
                                 )
 
-                                // Email is displayed but cannot be edited.
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Email Address")
                                         .font(.caption2)
@@ -85,7 +84,6 @@ struct UserSettingsView: View {
 
                         }
 
-                        // Security & Preferences
                         VStack(alignment: .leading, spacing: 16) {
                             sectionTitle("SECURITY & PREFERENCES")
 
@@ -131,7 +129,7 @@ struct UserSettingsView: View {
                             .padding(.horizontal, 20)
                         }
 
-                        // Sign Out
+
                         Button(action: signOut) {
                             HStack {
                                 if isSigningOut {
@@ -156,7 +154,6 @@ struct UserSettingsView: View {
                         .disabled(isSigningOut || isDeleting)
                         .padding(.horizontal, 20)
 
-                        // Delete Account
                         Button {
                             deletePassword = ""
                             showDeleteConfirmation = true
@@ -249,7 +246,6 @@ struct UserSettingsView: View {
         }
     }
 
-    // MARK: - Profile Header
 
     private var profileHeader: some View {
         VStack(spacing: 12) {
@@ -273,7 +269,6 @@ struct UserSettingsView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Section Title
 
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
@@ -284,7 +279,6 @@ struct UserSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Text Field
 
     private func settingTextField(
         title: String,
@@ -309,7 +303,6 @@ struct UserSettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - Load Profile
 
     private func loadProfile() {
         isLoading = true
@@ -332,7 +325,6 @@ struct UserSettingsView: View {
         }
     }
 
-    // MARK: - Save Profile
 
     private func saveProfile() {
         guard !isSaving else { return }
