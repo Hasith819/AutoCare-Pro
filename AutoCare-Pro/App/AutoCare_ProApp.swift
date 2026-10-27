@@ -11,8 +11,8 @@ import SwiftUI
 struct AutoCare_ProApp: App {
     var body: some Scene {
         WindowGroup {
-            //SplashView()
-            AppTabShellView()
+            SplashView()
+//            AppTabShellView()
         }
     }
 }

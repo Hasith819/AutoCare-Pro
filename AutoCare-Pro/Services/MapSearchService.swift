@@ -37,7 +37,7 @@ final class MapSearchService {
                 ).start()
 
                 for item in response.mapItems {
-                    let coordinate = item.location.coordinate
+                    let coordinate = item.placemark.coordinate
 
                     let destination = CLLocation(
                         latitude: coordinate.latitude,

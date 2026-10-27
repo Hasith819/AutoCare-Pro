@@ -52,7 +52,7 @@ struct ServiceCenter: Identifiable {
         type: ServiceCenterType,
         userLocation: CLLocation
     ) {
-        let placeCoordinate = mapItem.location.coordinate
+        let placeCoordinate = mapItem.placemark.coordinate
 
         self.name = mapItem.name ?? "Unknown location"
         self.phoneNumber = mapItem.phoneNumber

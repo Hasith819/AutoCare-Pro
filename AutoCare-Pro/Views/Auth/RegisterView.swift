@@ -8,13 +8,17 @@
 import SwiftUI
 
 struct RegisterView: View {
+
     @Environment(\.dismiss) private var dismiss
 
-    @State private var fullName = "Pubudu Hasith"
-    @State private var email = "owner@example.com"
+    @State private var fullName = ""
+    @State private var email = ""
     @State private var password = ""
-    @State private var phoneNumber = "+94 7X XXX XXXX"
-    @State private var isTermsAccepted = true
+    @State private var phoneNumber = ""
+    @State private var isTermsAccepted = false
+
+    @State private var validationErrors: [String: String] = [:]
+    @State private var showValidationAlert = false
 
     var body: some View {
         ZStack {
@@ -44,11 +48,15 @@ struct RegisterView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
 
-                    VStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 14) {
                         AppTextField(
                             title: "Full Name",
-                            placeholder: "Enter your name",
+                            placeholder: "Enter your full name",
                             text: $fullName
+                        )
+
+                        ValidationErrorText(
+                            message: validationErrors[FormValidator.fullName]
                         )
 
                         AppTextField(
@@ -59,49 +67,68 @@ struct RegisterView: View {
                             autocapitalization: .never
                         )
 
+                        ValidationErrorText(
+                            message: validationErrors[FormValidator.email]
+                        )
+
                         AppSecureField(
                             title: "Password",
                             placeholder: "Create a password",
                             text: $password
                         )
 
+                        ValidationErrorText(
+                            message: validationErrors[FormValidator.password]
+                        )
+
                         AppTextField(
                             title: "Phone Number",
-                            placeholder: "+94 7X XXX XXXX",
+                            placeholder: "+94771234567",
                             text: $phoneNumber,
                             keyboardType: .phonePad
+                        )
+
+                        ValidationErrorText(
+                            message: validationErrors[FormValidator.phoneNumber]
                         )
                     }
                     .padding(.horizontal, 24)
 
-                    Button(action: {
-                        isTermsAccepted.toggle()
-                    }) {
-                        HStack(spacing: 10) {
-                            Image(
-                                systemName: isTermsAccepted
-                                    ? "checkmark.square.fill"
-                                    : "square"
-                            )
-                            .foregroundColor(
-                                isTermsAccepted
-                                    ? AppColors.primaryText
-                                    : AppColors.secondaryLabel
-                            )
-                            .font(.system(size: 18, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            isTermsAccepted.toggle()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(
+                                    systemName: isTermsAccepted
+                                        ? "checkmark.square.fill"
+                                        : "square"
+                                )
+                                .foregroundColor(
+                                    isTermsAccepted
+                                        ? AppColors.accent
+                                        : AppColors.secondaryLabel
+                                )
+                                .font(.system(size: 18, weight: .semibold))
 
-                            Text("I agree to Terms & Conditions")
-                                .font(AppFonts.body)
-                                .foregroundColor(AppColors.primaryText)
+                                Text("I agree to Terms & Conditions")
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.primaryText)
 
-                            Spacer()
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+
+                        ValidationErrorText(
+                            message: validationErrors[FormValidator.terms]
+                        )
                     }
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 4)
 
                     AppButton(title: "Create My Account") {
-                        // Account creation will be added later.
+                        register()
                     }
                     .padding(.horizontal, 24)
 
@@ -121,9 +148,35 @@ struct RegisterView: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
+        .alert("Validation Successful", isPresented: $showValidationAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("All fields are valid. Account creation still needs to be connected to an authentication service.")
+        }
+    }
+
+    private func register() {
+        validationErrors = FormValidator.validateRegistration(
+            fullName: fullName,
+            email: email,
+            password: password,
+            phoneNumber: phoneNumber,
+            termsAccepted: isTermsAccepted
+        )
+
+        guard validationErrors.isEmpty else {
+            showValidationAlert = false
+            return
+        }
+
+        showValidationAlert = true
     }
 }
 
 #Preview {
-    RegisterView()
+    NavigationStack {
+        RegisterView()
+    }
 }
+

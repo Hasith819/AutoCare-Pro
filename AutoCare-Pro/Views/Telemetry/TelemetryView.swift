@@ -8,147 +8,457 @@
 import SwiftUI
 
 struct TelemetryView: View {
-    @State private var speed: Int = 64
-    @State private var rpm: Int = 3450
-    @State private var tripToday: String = "12.4 km"
-    @State private var coolantTemp: String = "91 °C"
-    @State private var batteryVoltage: String = "13.9 V"
-    @State private var protocolName: String = "OBD-II"
-    @State private var isConnected: Bool = true
-    @State private var isScanning: Bool = false
 
-    var body: some View {
-        ZStack {
-            AppColors.background
-                .ignoresSafeArea()
+    @StateObject private var viewModel = OBDViewModel()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    
-                
-                    headerSection
-                        .padding(.horizontal, 20)
-                        .padding(.top, 10)
-
-                  
-                    speedGaugeSection
-                        .padding(.horizontal, 20)
-
-             
-                    metricsGridSection
-                        .padding(.horizontal, 20)
-
-              
-                    scannerHeaderSection
-                        .padding(.horizontal, 20)
-
-             
-                    dtcCodesSection
-                        .padding(.horizontal, 20)
-
-                    Spacer().frame(height: 30)
-                }
-                .padding(.vertical, 16)
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
+    private var telemetry: TelemetryData {
+        viewModel.telemetry
     }
 
-   
+    private var batteryText: String {
+        guard let voltage = telemetry.batteryVoltage else {
+            return "--"
+        }
+
+        return String(format: "%.1f V", voltage)
+    }
+
+    private var tripText: String {
+        String(format: "%.2f km", telemetry.tripDistanceKm)
+    }
+
+
+    private var allDiagnosticCodes: [DTCCode] {
+        telemetry.storedCodes
+        + telemetry.pendingCodes
+        + telemetry.permanentCodes
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                headerSection
+                connectionSection
+                speedSection
+                metricsSection
+                diagnosticSection
+
+                if let reason = telemetry.ecuErrorReason {
+                    errorSection(reason)
+                }
+            }
+            .padding(20)
+        }
+        .background(AppColors.background.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Header
 
     private var headerSection: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Live Telemetry")
-                    .font(AppFonts.heading)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Live Telemetry")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(AppColors.primaryText)
+
+            Text("Monitor your vehicle's live engine data.")
+                .font(.subheadline)
+                .foregroundStyle(AppColors.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Connection
+
+    private var connectionSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(viewModel.connectionColor)
+                    .frame(width: 10, height: 10)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(viewModel.connectionLabel)
+                        .font(.headline)
+                        .foregroundStyle(AppColors.primaryText)
+
+                    Text(telemetry.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.secondaryText)
+                        .fixedSize(
+                            horizontal: false,
+                            vertical: true
+                        )
+                }
+
+                Spacer(minLength: 8)
+            }
+
+            Button {
+                viewModel.toggleConnection()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(
+                        systemName: viewModel.isBLEActive
+                            ? "xmark.circle"
+                            : "dot.radiowaves.left.and.right"
+                    )
+
+                    Text(viewModel.connectionButtonTitle)
+                }
+                .font(.headline)
+                .foregroundStyle(AppColors.primaryText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(AppColors.buttonBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(
+                            AppColors.accent.opacity(0.45),
+                            lineWidth: 1
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(AppColors.inputBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    // MARK: - Speed
+
+    private var speedSection: some View {
+        VStack(spacing: 14) {
+            Text("VEHICLE SPEED")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .tracking(2)
+                .foregroundStyle(AppColors.secondaryLabel)
+
+            ZStack {
+                Circle()
+                    .stroke(
+                        AppColors.secondaryLabel.opacity(0.2),
+                        lineWidth: 12
+                    )
+
+                Circle()
+                    .trim(
+                        from: 0,
+                        to: min(
+                            CGFloat(telemetry.speedKmh) / 180,
+                            1
+                        )
+                    )
+                    .stroke(
+                        AppColors.accent,
+                        style: StrokeStyle(
+                            lineWidth: 12,
+                            lineCap: .round
+                        )
+                    )
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 4) {
+                    Text("\(telemetry.speedKmh)")
+                        .font(
+                            .system(
+                                size: 52,
+                                weight: .bold,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(AppColors.primaryText)
+                        .contentTransition(.numericText())
+
+                    Text("km/h")
+                        .font(.subheadline)
+                        .foregroundStyle(AppColors.secondaryText)
+                }
+            }
+            .frame(width: 210, height: 210)
+            .padding(.vertical, 8)
+
+            Text(
+                viewModel.isECUActive
+                    ? "Receiving vehicle data"
+                    : "Waiting for ECU connection"
+            )
+            .font(.caption)
+            .foregroundStyle(AppColors.secondaryLabel)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .background(AppColors.inputBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    // MARK: - Engine Metrics
+
+    private var metricsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionTitle("Engine Metrics")
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12)
+                ],
+                spacing: 12
+            ) {
+                StatCard(
+                    title: "ENGINE RPM",
+                    value: viewModel.isECUActive
+                        ? "\(telemetry.rpm)"
+                        : "--",
+                    subtitle: "Engine speed"
+                )
+
+                StatCard(
+                    title: "COOLANT TEMP",
+                    value: viewModel.isECUActive
+                        ? "\(telemetry.coolantTempC) °C"
+                        : "--",
+                    subtitle: "Engine coolant temperature",
+                    valueColor: coolantColor
+                )
+
+                StatCard(
+                    title: "BATTERY VOLTAGE",
+                    value: viewModel.isECUActive ? batteryText : "--",
+                    subtitle: "Voltage reported by ECU or adapter"
+                )
+
+                StatCard(
+                    title: "TRIP DISTANCE",
+                    value: tripText,
+                    subtitle: "Estimated while connected"
+                )
+            }
+        }
+    }
+
+    private var coolantColor: Color {
+        guard viewModel.isECUActive else {
+            return AppColors.accent
+        }
+
+        if telemetry.coolantTempC >= 110 {
+            return .red
+        }
+
+        if telemetry.coolantTempC >= 100 {
+            return .orange
+        }
+
+        return AppColors.accent
+    }
+
+
+    // MARK: - DTC Fault Diagnostic Scanner
+
+    private var diagnosticSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            scannerHeaderSection
+
+            if telemetry.isScanningDTCs {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .tint(AppColors.accent)
+
+                    Text("Reading diagnostic trouble codes...")
+                        .font(.caption)
+                        .foregroundStyle(AppColors.secondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(AppColors.inputBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+            } else if telemetry.hasCompletedDTCScan {
+                dtcCodesSection
+
+            } else {
+                Text(telemetry.dtcScanMessage)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.secondaryLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(AppColors.inputBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+        }
+    }
+
+    private var scannerHeaderSection: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+
+            Text("DTC Fault Diagnostic Scanner")
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundStyle(AppColors.primaryText)
+                .lineLimit(2)
+
+            Spacer(minLength: 4)
+
+            Button {
+                viewModel.scanFaultCodes()
+            } label: {
+                HStack(spacing: 6) {
+                    if telemetry.isScanningDTCs {
+                        ProgressView()
+                            .tint(AppColors.accent)
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+
+                    Text(
+                        telemetry.isScanningDTCs
+                            ? "Scanning..."
+                            : "Deep Scan"
+                    )
+                }
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundStyle(AppColors.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(AppColors.buttonBackground)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(
+                !viewModel.isECUActive
+                || telemetry.isScanningDTCs
+            )
+            .opacity(viewModel.isECUActive ? 1 : 0.5)
+        }
+    }
+
+    // MARK: - DTC Fault Codes
+
+    @ViewBuilder
+    private var dtcCodesSection: some View {
+        if allDiagnosticCodes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(
+                    "No codes reported",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .font(.subheadline.bold())
+                .foregroundStyle(.green)
+
+                Text(telemetry.dtcScanMessage)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.secondaryLabel)
+
+                Text(
+                    "This means the ECU reported no codes in the scanned categories. It does not guarantee that every vehicle system is fault-free."
+                )
+                .font(.caption2)
+                .foregroundStyle(AppColors.secondaryLabel)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(AppColors.inputBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+
+        } else {
+            VStack(spacing: 14) {
+                ForEach(Array(allDiagnosticCodes.enumerated()), id: \.offset) { _, code in
+                    dtcCard(code)
+                }
+            }
+        }
+    }
+
+    private func dtcCard(_ code: DTCCode) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Diagnostic Trouble Code")
+                    .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundStyle(AppColors.primaryText)
 
-                Text("ELM327 • CoreBluetooth • ECU stream")
-                    .font(AppFonts.body)
-                    .foregroundStyle(AppColors.secondaryLabel)
-            }
+                Spacer()
 
-            Spacer()
-
-         
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isConnected ? Color.green : Color.red)
-                    .frame(width: 8, height: 8)
-
-                Text(isConnected ? "Connected" : "Disconnected")
-                    .font(.caption)
+                Text(code.category)
+                    .font(.caption2)
                     .fontWeight(.bold)
-                    .foregroundStyle(isConnected ? Color.green : Color.red)
+                    .foregroundStyle(statusColor(for: code))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(statusColor(for: code).opacity(0.15))
+                    .clipShape(Capsule())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.green.opacity(0.15))
-            .clipShape(Capsule())
-        }
-    }
 
-    private var speedGaugeSection: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(AppColors.inputBackground)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(code.code)
+                    .font(.headline.bold())
+                    .foregroundStyle(AppColors.accent)
 
-            VStack(spacing: 16) {
-               
-                ZStack {
-                    Circle()
-                        .stroke(AppColors.secondaryLabel.opacity(0.2), lineWidth: 6)
-                        .frame(width: 150, height: 150)
-
-                    Circle()
-                        .trim(from: 0.0, to: 0.75)
-                        .stroke(AppColors.accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .frame(width: 150, height: 150)
-                        .rotationEffect(.degrees(135))
-
-                    VStack(spacing: 2) {
-                        Text("\(speed)")
-                            .font(.system(size: 52, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppColors.primaryText)
-
-                        Text("km/h")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(AppColors.accent)
-
-                        Text("\(rpm) rpm")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.green)
-                            .padding(.top, 2)
-                    }
-                }
-                .padding(.vertical, 20)
+                Text(code.description)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.primaryText)
             }
-        }
-    }
 
-    private var metricsGridSection: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-            metricCard(title: "Trip Today", value: tripToday, color: AppColors.accent)
-            metricCard(title: "Coolant Temp", value: coolantTemp, color: .green)
-            metricCard(title: "Battery", value: batteryVoltage, color: AppColors.accent)
-            metricCard(title: "Protocol", value: protocolName, color: AppColors.primaryText)
-        }
-    }
+            Text("Severity: Warning")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(statusColor(for: code))
 
-    private func metricCard(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(AppFonts.footer)
+            Text("Reported by the vehicle ECU during this scan.")
+                .font(.caption2)
                 .foregroundStyle(AppColors.secondaryLabel)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.inputBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    statusColor(for: code).opacity(0.7),
+                    lineWidth: 1.5
+                )
+        }
+    }
 
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(color)
+    private func statusColor(for code: DTCCode) -> Color {
+        switch code.category {
+        case "Permanent":
+            return .red
+
+        case "Pending":
+            return .orange
+
+        default:
+            return .orange
+        }
+    }
+
+    // MARK: - Error
+
+    private func errorSection(_ reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(
+                "Connection Details",
+                systemImage: "exclamationmark.triangle"
+            )
+            .font(.headline)
+            .foregroundStyle(.orange)
+
+            Text(reason)
+                .font(.subheadline)
+                .foregroundStyle(AppColors.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -156,132 +466,12 @@ struct TelemetryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
-    private var scannerHeaderSection: some View {
-        HStack {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+    // MARK: - Helpers
 
-                Text("DTC Fault Diagnostic Scanner")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppColors.primaryText)
-            }
-
-            Spacer()
-
-            Button {
-                isScanning = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    isScanning = false
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    if isScanning {
-                        ProgressView()
-                            .tint(AppColors.accent)
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    Text("Deep Scan")
-                }
-                .font(.caption)
-                .fontWeight(.bold)
-                .foregroundStyle(AppColors.accent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(AppColors.buttonBackground)
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var dtcCodesSection: some View {
-        VStack(spacing: 14) {
-            // Warning DTC Card (Red Outline)
-            dtcCard(
-                title: "Diagnostic Trouble Codes",
-                code: "P0300",
-                description: "Random / Multiple Cylinder Misfire",
-                severity: "Severity: Warning",
-                details: "Engine detected irregular combustion.",
-                statusText: "Warning",
-                statusColor: .orange,
-                borderColor: .red
-            )
-
-       
-            dtcCard(
-                title: "Diagnostic Trouble Codes",
-                code: "P0300",
-                description: "Random / Multiple Cylinder Misfire",
-                severity: "Severity: Warning",
-                details: "Engine detected irregular combustion.",
-                statusText: "Resolved",
-                statusColor: .green,
-                borderColor: .green
-            )
-        }
-    }
-
-    private func dtcCard(
-        title: String,
-        code: String,
-        description: String,
-        severity: String,
-        details: String,
-        statusText: String,
-        statusColor: Color,
-        borderColor: Color
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppColors.primaryText)
-
-                Spacer()
-
-                Text(statusText)
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(statusColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(statusColor.opacity(0.15))
-                    .clipShape(Capsule())
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(code)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppColors.accent)
-
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(AppColors.primaryText)
-            }
-
-            Text(severity)
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundStyle(statusColor)
-
-            Text(details)
-                .font(.caption2)
-                .foregroundStyle(AppColors.secondaryLabel)
-        }
-        .padding(16)
-        .background(AppColors.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(borderColor.opacity(0.7), lineWidth: 1.5)
-        )
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.bold())
+            .foregroundStyle(AppColors.primaryText)
     }
 }
 

@@ -47,7 +47,7 @@ struct StatCard: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 94, alignment: .topLeading)
+        .frame(height: 60, alignment: .topLeading)
         .padding(14)
         .background(AppColors.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
