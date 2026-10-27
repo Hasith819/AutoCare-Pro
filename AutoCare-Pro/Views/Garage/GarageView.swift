@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct GarageView: View {
+    // State to control user settings sheet presentation
+    @State private var showUserSettings = false
+
     var body: some View {
         ZStack {
             AppColors.background
@@ -42,9 +45,11 @@ struct GarageView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
+        // Opens User Settings as a modal sheet when profile icon is tapped
+        .sheet(isPresented: $showUserSettings) {
+            UserSettingsView()
+        }
     }
-
-
 
     private var headerSection: some View {
         HStack(alignment: .top) {
@@ -60,13 +65,17 @@ struct GarageView: View {
 
             Spacer()
 
-            Image(systemName: "person.circle.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(AppColors.secondaryLabel)
+            // Clickable User Profile Icon
+            Button {
+                showUserSettings = true
+            } label: {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(AppColors.secondaryLabel)
+            }
+            .buttonStyle(.plain)
         }
     }
-
-
 
     private var activeVehicleCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -120,11 +129,6 @@ struct GarageView: View {
                             endPoint: .bottom
                         )
                     }
-
-                // Add your car image here when available.
-                // Image("toyota_allion")
-                //     .resizable()
-                //     .scaledToFill()
             }
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
@@ -132,8 +136,6 @@ struct GarageView: View {
         .background(AppColors.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
-
-    // MARK: - Reusable Stats Grid
 
     private var statsGridSection: some View {
         LazyVGrid(
@@ -172,8 +174,6 @@ struct GarageView: View {
         }
     }
 
-    // MARK: - DTC Alert
-
     private var dtcAlertBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.circle.fill")
@@ -195,8 +195,6 @@ struct GarageView: View {
                 .stroke(Color.orange.opacity(0.5), lineWidth: 1)
         }
     }
-
-    // MARK: - Maintenance Expenses
 
     private var maintenanceExpensesCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -236,8 +234,6 @@ struct GarageView: View {
             .fill(AppColors.accent)
             .frame(width: 28, height: height)
     }
-
-    // MARK: - Quick Actions
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -298,7 +294,7 @@ struct GarageView: View {
 }
 
 #Preview {
-    NavigationStack {
+    NavigationStack{
         GarageView()
     }
 }

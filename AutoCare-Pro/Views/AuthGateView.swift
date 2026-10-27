@@ -13,7 +13,7 @@ struct AuthGateView: View {
     var body: some View {
         Group {
             if authService.user != nil {
-                HomeView()
+                AppTabShellView()
             } else {
                 LoginView()
             }

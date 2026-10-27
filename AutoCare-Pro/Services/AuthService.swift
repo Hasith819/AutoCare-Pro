@@ -6,14 +6,20 @@
 //
 
 import Foundation
+import Combine
 import FirebaseAuth
 import FirebaseFirestore
-import Combine
 
-@MainActor
+struct UserProfile {
+    let fullName: String
+    let email: String
+    let phoneNumber: String
+}
+
 final class AuthService: ObservableObject {
 
     @Published private(set) var user: FirebaseAuth.User?
+    @Published private(set) var isCreatingAccount = false
 
     private let auth = Auth.auth()
     private let database = Firestore.firestore()
@@ -22,9 +28,15 @@ final class AuthService: ObservableObject {
     init() {
         user = auth.currentUser
 
-        authListener = auth.addStateDidChangeListener {
-            [weak self] _, user in
-            self?.user = user
+        authListener = auth.addStateDidChangeListener { [weak self] _, user in
+            DispatchQueue.main.async {
+                guard let self else { return }
+
+                // Ignore Firebase's temporary sign-in during registration.
+                guard !self.isCreatingAccount else { return }
+
+                self.user = user
+            }
         }
     }
 
@@ -34,6 +46,8 @@ final class AuthService: ObservableObject {
         }
     }
 
+    // MARK: - Register
+
     func createAccount(
         fullName: String,
         email: String,
@@ -41,42 +55,52 @@ final class AuthService: ObservableObject {
         phoneNumber: String,
         completion: @escaping (String?) -> Void
     ) {
-        let cleanName = fullName.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        let cleanEmail = email.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        let cleanPhone = phoneNumber.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+        guard !isCreatingAccount else { return }
+
+        // Set this before Firebase creates the account.
+        isCreatingAccount = true
+
+        let cleanName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanPhone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
 
         auth.createUser(
             withEmail: cleanEmail,
             password: password
         ) { [weak self] result, error in
 
+            guard let self else { return }
+
             if let error {
-                completion(Self.friendlyMessage(for: error))
+                self.finishRegistration(
+                    error: error.localizedDescription,
+                    signOut: false,
+                    completion: completion
+                )
                 return
             }
 
-            guard let self, let newUser = result?.user else {
-                completion("Could not create your account. Please try again.")
+            guard let newUser = result?.user else {
+                self.finishRegistration(
+                    error: "Could not create your account.",
+                    signOut: false,
+                    completion: completion
+                )
                 return
             }
 
-            let request = newUser.createProfileChangeRequest()
-            request.displayName = cleanName
+            let changeRequest = newUser.createProfileChangeRequest()
+            changeRequest.displayName = cleanName
 
-            request.commitChanges { [weak self] error in
+            changeRequest.commitChanges { [weak self] error in
+                guard let self else { return }
+
                 if let error {
-                    completion(Self.friendlyMessage(for: error))
-                    return
-                }
-
-                guard let self else {
-                    completion("Account created, but the profile could not be saved.")
+                    self.finishRegistration(
+                        error: error.localizedDescription,
+                        signOut: true,
+                        completion: completion
+                    )
                     return
                 }
 
@@ -87,71 +111,242 @@ final class AuthService: ObservableObject {
                         "email": cleanEmail,
                         "phoneNumber": cleanPhone,
                         "createdAt": FieldValue.serverTimestamp()
-                    ]) { error in
+                    ]) { [weak self] error in
+
+                        guard let self else { return }
+
                         if let error {
-                            completion(
-                                "Your account was created, but saving your profile failed. Please contact support before trying to register again. Details: \(error.localizedDescription)"
+                            self.finishRegistration(
+                                error: error.localizedDescription,
+                                signOut: true,
+                                completion: completion
                             )
                             return
                         }
 
-                        completion(nil)
+                        // Account and profile created.
+                        // Sign out before reporting success to the UI.
+                        self.finishRegistration(
+                            error: nil,
+                            signOut: true,
+                            completion: completion
+                        )
                     }
             }
         }
     }
+
+    private func finishRegistration(
+        error: String?,
+        signOut: Bool,
+        completion: @escaping (String?) -> Void
+    ) {
+        var finalError = error
+
+        if signOut {
+            do {
+                try auth.signOut()
+            } catch {
+                let signOutMessage =
+                    "Could not sign out after registration: \(error.localizedDescription)"
+
+                if let existingError = finalError {
+                    finalError = "\(existingError) \(signOutMessage)"
+                } else {
+                    finalError = signOutMessage
+                }
+            }
+        }
+
+        DispatchQueue.main.async {
+            // Publish the actual final authentication state.
+            self.user = self.auth.currentUser
+            self.isCreatingAccount = false
+            completion(finalError)
+        }
+    }
+
+    // MARK: - Login
 
     func signIn(
         email: String,
         password: String,
         completion: @escaping (String?) -> Void
     ) {
-        let cleanEmail = email.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-
         auth.signIn(
-            withEmail: cleanEmail,
+            withEmail: email.trimmingCharacters(in: .whitespacesAndNewlines),
             password: password
         ) { _, error in
+            completion(error?.localizedDescription)
+        }
+    }
+
+    // MARK: - Load Profile
+
+    func fetchUserProfile(
+        completion: @escaping (Result<UserProfile, Error>) -> Void
+    ) {
+        guard let currentUser = auth.currentUser else {
+            completion(.failure(
+                NSError(
+                    domain: "AutoCare",
+                    code: 401,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Please sign in again."
+                    ]
+                )
+            ))
+            return
+        }
+
+        database.collection("users")
+            .document(currentUser.uid)
+            .getDocument { snapshot, error in
+
+                if let error {
+                    completion(.failure(error))
+                    return
+                }
+
+                let data = snapshot?.data() ?? [:]
+
+                let profile = UserProfile(
+                    fullName: data["fullName"] as? String
+                        ?? currentUser.displayName
+                        ?? "",
+                    email: currentUser.email ?? "",
+                    phoneNumber: data["phoneNumber"] as? String ?? ""
+                )
+
+                completion(.success(profile))
+            }
+    }
+
+    // MARK: - Update Profile
+
+    func updateUserProfile(
+        fullName: String,
+        phoneNumber: String,
+        completion: @escaping (String?) -> Void
+    ) {
+        guard let currentUser = auth.currentUser else {
+            completion("Please sign in again.")
+            return
+        }
+
+        let cleanName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanPhone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanName.isEmpty else {
+            completion("Full name cannot be empty.")
+            return
+        }
+
+        guard !cleanPhone.isEmpty else {
+            completion("Phone number cannot be empty.")
+            return
+        }
+
+        let changeRequest = currentUser.createProfileChangeRequest()
+        changeRequest.displayName = cleanName
+
+        changeRequest.commitChanges { [weak self] error in
+            guard let self else { return }
+
             if let error {
-                completion(Self.friendlyMessage(for: error))
-            } else {
+                completion(error.localizedDescription)
+                return
+            }
+
+            self.database.collection("users")
+                .document(currentUser.uid)
+                .setData([
+                    "fullName": cleanName,
+                    "phoneNumber": cleanPhone
+                ], merge: true) { error in
+                    completion(error?.localizedDescription)
+                }
+        }
+    }
+
+    // MARK: - Sign Out
+
+    func signOut(completion: @escaping (String?) -> Void) {
+        do {
+            try auth.signOut()
+
+            DispatchQueue.main.async {
+                self.user = nil
                 completion(nil)
             }
+        } catch {
+            completion(error.localizedDescription)
         }
     }
 
-    func signOut() throws {
-        try auth.signOut()
-    }
+    // MARK: - Delete Account
 
-    private static func friendlyMessage(for error: Error) -> String {
-        let authError = error as NSError
-
-        guard authError.domain == AuthErrorDomain,
-              let code = AuthErrorCode(rawValue: authError.code)
-        else {
-            return error.localizedDescription
+    func deleteAccount(
+        password: String,
+        completion: @escaping (String?) -> Void
+    ) {
+        guard let currentUser = auth.currentUser,
+              let email = currentUser.email else {
+            completion("Please sign in again.")
+            return
         }
 
-        switch code {
-        case .emailAlreadyInUse:
-            return "This email is already registered. Please sign in."
-        case .invalidEmail:
-            return "Please enter a valid email address."
-        case .weakPassword:
-            return "Your password is too weak. Please choose a stronger password."
-        case .wrongPassword, .invalidCredential:
-            return "Email or password is incorrect."
-        case .userNotFound:
-            return "No account was found for this email."
-        case .networkError:
-            return "Network error. Check your internet connection."
-        case .tooManyRequests:
-            return "Too many attempts. Please wait and try again."
-        default:
-            return error.localizedDescription
+        let credential = EmailAuthProvider.credential(
+            withEmail: email,
+            password: password
+        )
+
+        currentUser.reauthenticate(with: credential) { [weak self] _, error in
+            guard let self else { return }
+
+            if let error {
+                completion(
+                    "Could not verify your password. \(error.localizedDescription)"
+                )
+                return
+            }
+
+            let profileRef = self.database.collection("users")
+                .document(currentUser.uid)
+
+            profileRef.getDocument { snapshot, error in
+                if let error {
+                    completion(error.localizedDescription)
+                    return
+                }
+
+                let oldProfile = snapshot?.data()
+
+                profileRef.delete { error in
+                    if let error {
+                        completion(error.localizedDescription)
+                        return
+                    }
+
+                    currentUser.delete { error in
+                        if let error {
+                            if let oldProfile {
+                                profileRef.setData(oldProfile) { _ in
+                                    completion(error.localizedDescription)
+                                }
+                            } else {
+                                completion(error.localizedDescription)
+                            }
+                            return
+                        }
+
+                        DispatchQueue.main.async {
+                            self.user = nil
+                            completion(nil)
+                        }
+                    }
+                }
+            }
         }
     }
 }

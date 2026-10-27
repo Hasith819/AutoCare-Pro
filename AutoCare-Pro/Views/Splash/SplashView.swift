@@ -45,7 +45,7 @@ struct SplashView: View {
                             .fill(Color.white.opacity(0.12))
 
                         Capsule()
-                            .fill(Color.green)
+                            .fill(AppColors.accent)
                             .frame(
                                 width: geometry.size.width * progress
                             )

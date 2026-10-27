@@ -10,6 +10,7 @@ import SwiftUI
 struct LoginView: View {
 
     @EnvironmentObject private var authService: AuthService
+    @EnvironmentObject private var snackBarManager: SnackBarManager
 
     @State private var email = ""
     @State private var password = ""
@@ -125,12 +126,18 @@ struct LoginView: View {
             email: email,
             password: password
         ) { error in
+
             DispatchQueue.main.async {
                 isLoading = false
 
                 if let error {
                     authError = error
                     showAuthAlert = true
+                } else {
+                    snackBarManager.show(
+                        "Successfully logged in",
+                        isSuccess: true
+                    )
                 }
             }
         }
@@ -140,4 +147,5 @@ struct LoginView: View {
 #Preview {
     LoginView()
         .environmentObject(AuthService())
+        .environmentObject(SnackBarManager())
 }

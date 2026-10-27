@@ -5,17 +5,20 @@
 //  Created by Student4 on 2026-10-26.
 //
 
+
 import SwiftUI
 
 struct RegisterView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authService: AuthService
+    @EnvironmentObject private var snackBarManager: SnackBarManager
 
     @State private var fullName = ""
     @State private var email = ""
     @State private var password = ""
     @State private var phoneNumber = ""
+
     @State private var isTermsAccepted = false
     @State private var validationErrors: [String: String] = [:]
     @State private var authError = ""
@@ -29,6 +32,7 @@ struct RegisterView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
+
                     Spacer()
                         .frame(height: 30)
 
@@ -51,6 +55,7 @@ struct RegisterView: View {
                     .padding(.horizontal, 24)
 
                     VStack(alignment: .leading, spacing: 14) {
+
                         AppTextField(
                             title: "Full Name",
                             placeholder: "Enter your full name",
@@ -97,6 +102,7 @@ struct RegisterView: View {
                     .padding(.horizontal, 24)
 
                     VStack(alignment: .leading, spacing: 8) {
+
                         Button {
                             isTermsAccepted.toggle()
                         } label: {
@@ -131,7 +137,9 @@ struct RegisterView: View {
                     .padding(.horizontal, 24)
 
                     AppButton(
-                        title: isLoading ? "Creating Account..." : "Create My Account"
+                        title: isLoading
+                            ? "Creating Account..."
+                            : "Create My Account"
                     ) {
                         register()
                     }
@@ -185,6 +193,7 @@ struct RegisterView: View {
             password: password,
             phoneNumber: phoneNumber
         ) { error in
+
             DispatchQueue.main.async {
                 isLoading = false
 
@@ -192,6 +201,12 @@ struct RegisterView: View {
                     authError = error
                     showAuthAlert = true
                 } else {
+                    // Show success before returning to Login.
+                    snackBarManager.show(
+                        "Account created successfully",
+                        isSuccess: true
+                    )
+
                     dismiss()
                 }
             }
@@ -203,5 +218,6 @@ struct RegisterView: View {
     NavigationStack {
         RegisterView()
             .environmentObject(AuthService())
+            .environmentObject(SnackBarManager())
     }
 }
