@@ -9,11 +9,14 @@ import SwiftUI
 
 struct LoginView: View {
 
+    @EnvironmentObject private var authService: AuthService
+
     @State private var email = ""
     @State private var password = ""
-
     @State private var validationErrors: [String: String] = [:]
-    @State private var showValidationAlert = false
+    @State private var authError = ""
+    @State private var showAuthAlert = false
+    @State private var isLoading = false
 
     var body: some View {
         NavigationStack {
@@ -67,7 +70,9 @@ struct LoginView: View {
                     }
                     .padding(.horizontal, 24)
 
-                    AppButton(title: "Sign In") {
+                    AppButton(
+                        title: isLoading ? "Signing In..." : "Sign In"
+                    ) {
                         login()
                     }
                     .padding(.horizontal, 24)
@@ -85,6 +90,7 @@ struct LoginView: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(AppColors.accent)
                         }
+                        .disabled(isLoading)
                     }
                     .padding(.top, 8)
 
@@ -92,30 +98,46 @@ struct LoginView: View {
                 }
             }
             .preferredColorScheme(.dark)
-            .alert("Validation Successful", isPresented: $showValidationAlert) {
+            .alert("Sign In Failed", isPresented: $showAuthAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Your fields are valid. Actual sign-in still needs to be connected to an authentication service.")
+                Text(authError)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
     }
 
     private func login() {
+        guard !isLoading else { return }
+
         validationErrors = FormValidator.validateLogin(
             email: email,
             password: password
         )
 
         guard validationErrors.isEmpty else {
-            showValidationAlert = false
             return
         }
 
-        showValidationAlert = true
+        isLoading = true
+
+        authService.signIn(
+            email: email,
+            password: password
+        ) { error in
+            DispatchQueue.main.async {
+                isLoading = false
+
+                if let error {
+                    authError = error
+                    showAuthAlert = true
+                }
+            }
+        }
     }
 }
 
 #Preview {
     LoginView()
+        .environmentObject(AuthService())
 }

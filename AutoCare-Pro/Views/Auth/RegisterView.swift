@@ -10,15 +10,17 @@ import SwiftUI
 struct RegisterView: View {
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: AuthService
 
     @State private var fullName = ""
     @State private var email = ""
     @State private var password = ""
     @State private var phoneNumber = ""
     @State private var isTermsAccepted = false
-
     @State private var validationErrors: [String: String] = [:]
-    @State private var showValidationAlert = false
+    @State private var authError = ""
+    @State private var showAuthAlert = false
+    @State private var isLoading = false
 
     var body: some View {
         ZStack {
@@ -120,6 +122,7 @@ struct RegisterView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .disabled(isLoading)
 
                         ValidationErrorText(
                             message: validationErrors[FormValidator.terms]
@@ -127,7 +130,9 @@ struct RegisterView: View {
                     }
                     .padding(.horizontal, 24)
 
-                    AppButton(title: "Create My Account") {
+                    AppButton(
+                        title: isLoading ? "Creating Account..." : "Create My Account"
+                    ) {
                         register()
                     }
                     .padding(.horizontal, 24)
@@ -140,6 +145,7 @@ struct RegisterView: View {
                         AppTextButton(title: "Sign In") {
                             dismiss()
                         }
+                        .disabled(isLoading)
                     }
                     .padding(.top, 4)
 
@@ -149,14 +155,16 @@ struct RegisterView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .alert("Validation Successful", isPresented: $showValidationAlert) {
+        .alert("Registration Failed", isPresented: $showAuthAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("All fields are valid. Account creation still needs to be connected to an authentication service.")
+            Text(authError)
         }
     }
 
     private func register() {
+        guard !isLoading else { return }
+
         validationErrors = FormValidator.validateRegistration(
             fullName: fullName,
             email: email,
@@ -166,17 +174,34 @@ struct RegisterView: View {
         )
 
         guard validationErrors.isEmpty else {
-            showValidationAlert = false
             return
         }
 
-        showValidationAlert = true
+        isLoading = true
+
+        authService.createAccount(
+            fullName: fullName,
+            email: email,
+            password: password,
+            phoneNumber: phoneNumber
+        ) { error in
+            DispatchQueue.main.async {
+                isLoading = false
+
+                if let error {
+                    authError = error
+                    showAuthAlert = true
+                } else {
+                    dismiss()
+                }
+            }
+        }
     }
 }
 
 #Preview {
     NavigationStack {
         RegisterView()
+            .environmentObject(AuthService())
     }
 }
-
