@@ -266,6 +266,7 @@
 				DEVELOPMENT_TEAM = V635FF527C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AutoCare;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AutoCare uses Bluetooth to connect to your OBD-II vehicle diagnostic adapter.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AutoCare uses your location to find nearby Toyota service centers, repair workshops, and fuel stations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -301,6 +302,7 @@
 				DEVELOPMENT_TEAM = V635FF527C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AutoCare;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AutoCare uses Bluetooth to connect to your OBD-II vehicle diagnostic adapter.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AutoCare uses your location to find nearby Toyota service centers, repair workshops, and fuel stations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

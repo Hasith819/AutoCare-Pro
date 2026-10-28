@@ -14,6 +14,7 @@ struct UserProfile {
     let fullName: String
     let email: String
     let phoneNumber: String
+    let profilePhotoBase64: String?
 }
 
 final class AuthService: ObservableObject {
@@ -32,7 +33,7 @@ final class AuthService: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
 
-                // Ignore Firebase's temporary sign-in during registration.
+        
                 guard !self.isCreatingAccount else { return }
 
                 self.user = user
@@ -46,7 +47,7 @@ final class AuthService: ObservableObject {
         }
     }
 
-    // MARK: - Register
+
 
     func createAccount(
         fullName: String,
@@ -57,7 +58,7 @@ final class AuthService: ObservableObject {
     ) {
         guard !isCreatingAccount else { return }
 
-        // Set this before Firebase creates the account.
+
         isCreatingAccount = true
 
         let cleanName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -124,8 +125,7 @@ final class AuthService: ObservableObject {
                             return
                         }
 
-                        // Account and profile created.
-                        // Sign out before reporting success to the UI.
+
                         self.finishRegistration(
                             error: nil,
                             signOut: true,
@@ -159,14 +159,13 @@ final class AuthService: ObservableObject {
         }
 
         DispatchQueue.main.async {
-            // Publish the actual final authentication state.
             self.user = self.auth.currentUser
             self.isCreatingAccount = false
             completion(finalError)
         }
     }
 
-    // MARK: - Login
+
 
     func signIn(
         email: String,
@@ -181,7 +180,6 @@ final class AuthService: ObservableObject {
         }
     }
 
-    // MARK: - Load Profile
 
     func fetchUserProfile(
         completion: @escaping (Result<UserProfile, Error>) -> Void
@@ -215,18 +213,19 @@ final class AuthService: ObservableObject {
                         ?? currentUser.displayName
                         ?? "",
                     email: currentUser.email ?? "",
-                    phoneNumber: data["phoneNumber"] as? String ?? ""
+                    phoneNumber: data["phoneNumber"] as? String ?? "",
+                    profilePhotoBase64: data["profilePhotoBase64"] as? String
                 )
 
                 completion(.success(profile))
             }
     }
 
-    // MARK: - Update Profile
 
     func updateUserProfile(
         fullName: String,
         phoneNumber: String,
+        profilePhotoBase64: String? = nil,
         completion: @escaping (String?) -> Void
     ) {
         guard let currentUser = auth.currentUser else {
@@ -262,14 +261,14 @@ final class AuthService: ObservableObject {
                 .document(currentUser.uid)
                 .setData([
                     "fullName": cleanName,
-                    "phoneNumber": cleanPhone
+                    "phoneNumber": cleanPhone,
+                    "profilePhotoBase64": profilePhotoBase64 ?? ""
                 ], merge: true) { error in
                     completion(error?.localizedDescription)
                 }
         }
     }
 
-    // MARK: - Sign Out
 
     func signOut(completion: @escaping (String?) -> Void) {
         do {
@@ -284,7 +283,6 @@ final class AuthService: ObservableObject {
         }
     }
 
-    // MARK: - Delete Account
 
     func deleteAccount(
         password: String,

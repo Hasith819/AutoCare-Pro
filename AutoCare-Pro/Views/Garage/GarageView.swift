@@ -9,6 +9,14 @@ import SwiftUI
 
 struct GarageView: View {
 
+    @EnvironmentObject private var snackBarManager: SnackBarManager
+    @EnvironmentObject private var authService: AuthService
+
+    @State private var profilePhotoBase64 = ""
+
+    @ObservedObject var viewModel: GarageViewModel
+    let onVehicleChanged: (() -> Void)?
+
     @State private var showUserSettings = false
     @State private var showVehicleForm = false
     @State private var showVehicleDropdown = false
@@ -16,23 +24,19 @@ struct GarageView: View {
 
     @State private var editingVehicle: Vehicle?
     @State private var vehicleToDelete: Vehicle?
-
-    @State private var vehicles: [Vehicle] = [
-        Vehicle(
-            brand: "Toyota",
-            model: "Allion",
-            registrationNumber: "KN 2426",
-            chassisNumber: "",
-            licenseExpiry: "",
-            insuranceExpiry: "",
-            odometerReading: "128642"
-        )
-    ]
-
     @State private var selectedVehicleID: UUID?
+    @State private var activeVehicleImage: UIImage?
+
+    init(
+        viewModel: GarageViewModel = GarageViewModel(),
+        onVehicleChanged: (() -> Void)? = nil
+    ) {
+        self.viewModel = viewModel
+        self.onVehicleChanged = onVehicleChanged
+    }
 
     private var activeVehicle: Vehicle? {
-        vehicles.first { $0.id == selectedVehicleID } ?? vehicles.first
+        viewModel.vehicles.first { $0.id == selectedVehicleID } ?? viewModel.vehicles.first
     }
 
     var body: some View {
@@ -51,11 +55,12 @@ struct GarageView: View {
 
                     if showVehicleDropdown {
                         VehicleDropdownView(
-                            vehicles: vehicles,
+                            vehicles: viewModel.vehicles,
                             selectedVehicleID: activeVehicle?.id,
                             onSelect: { vehicle in
                                 selectedVehicleID = vehicle.id
                                 showVehicleDropdown = false
+                                snackBarManager.show("\(vehicle.displayName) selected", isSuccess: true)
                             },
                             onEdit: { vehicle in
                                 editingVehicle = vehicle
@@ -90,10 +95,31 @@ struct GarageView: View {
                 .padding(.vertical, 16)
             }
         }
+        .onAppear {
+            viewModel.loadCatalogIfNeeded()
+            viewModel.loadVehiclesIfNeeded()
+            refreshActiveVehicleImage()
+            loadProfilePhoto()
+        }
+        .onChange(of: selectedVehicleID) { _, _ in
+            refreshActiveVehicleImage()
+        }
+        .onChange(of: viewModel.vehicles) { _, _ in
+            if let selectedVehicleID,
+               !viewModel.vehicles.contains(where: { $0.id == selectedVehicleID }) {
+                self.selectedVehicleID = viewModel.vehicles.first?.id
+            }
+            refreshActiveVehicleImage()
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
 
-        .sheet(isPresented: $showUserSettings) {
+        .sheet(
+            isPresented: $showUserSettings,
+            onDismiss: {
+                loadProfilePhoto()
+            }
+        ) {
             UserSettingsView()
         }
 
@@ -101,17 +127,25 @@ struct GarageView: View {
             editingVehicle = nil
         }) {
             NavigationStack {
-                AddVehicleView(vehicle: editingVehicle) { savedVehicle in
-                    if let index = vehicles.firstIndex(where: {
-                        $0.id == savedVehicle.id
-                    }) {
-                        vehicles[index] = savedVehicle
-                    } else {
-                        vehicles.append(savedVehicle)
-                    }
+                AddVehicleView(
+                    vehicle: editingVehicle,
+                    availableBrands: viewModel.brands
+                ) { savedVehicle in
+                    viewModel.saveVehicle(savedVehicle) { error in
+                        if error == nil {
+                            selectedVehicleID = savedVehicle.id
+                            showVehicleForm = false
+                            onVehicleChanged?()
 
-                    selectedVehicleID = savedVehicle.id
-                    showVehicleForm = false
+                            if editingVehicle == nil {
+                                snackBarManager.show("Vehicle added successfully", isSuccess: true)
+                            } else {
+                                snackBarManager.show("Vehicle updated successfully", isSuccess: true)
+                            }
+                        } else {
+                            snackBarManager.show(error ?? "Unable to save vehicle", isSuccess: false)
+                        }
+                    }
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -141,8 +175,6 @@ struct GarageView: View {
         }
     }
 
-
-
     private var headerSection: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
@@ -160,23 +192,29 @@ struct GarageView: View {
             Button {
                 showUserSettings = true
             } label: {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(AppColors.secondaryLabel)
+                if let profileImage = Base64ImageStorage.decode(profilePhotoBase64) {
+                    Image(uiImage: profileImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                } else {
+                    Image(systemName: "person.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(AppColors.secondaryLabel)
+                }
             }
             .buttonStyle(.plain)
         }
     }
 
-   
-
     private var activeVehicleCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showVehicleDropdown.toggle()
-                }
-            } label: {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showVehicleDropdown.toggle()
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 6) {
@@ -185,14 +223,10 @@ struct GarageView: View {
                                 .fontWeight(.bold)
                                 .foregroundStyle(AppColors.accent)
 
-                            Image(
-                                systemName: showVehicleDropdown
-                                    ? "chevron.up"
-                                    : "chevron.down"
-                            )
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(AppColors.accent)
+                            Image(systemName: showVehicleDropdown ? "chevron.up" : "chevron.down")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(AppColors.accent)
                         }
 
                         Text(activeVehicle?.displayName ?? "No vehicle selected")
@@ -208,33 +242,72 @@ struct GarageView: View {
 
                     Spacer()
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
 
-            ZStack(alignment: .bottomLeading) {
-                Rectangle()
-                    .fill(Color(red: 0.12, green: 0.15, blue: 0.18))
-                    .frame(height: 160)
-                    .overlay {
-                        LinearGradient(
-                            colors: [
-                                Color.cyan.opacity(0.1),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                ZStack(alignment: .bottomLeading) {
+                    if let image = activeVehicleImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 160)
+                            .clipped()
+                    } else if let photoURL = activeVehicle?.photoURL, !photoURL.isEmpty {
+                        AsyncImage(url: URL(string: photoURL)) { phase in
+                            switch phase {
+                            case .empty:
+                                placeholderVehicleImage
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 160)
+                                    .clipped()
+                            case .failure:
+                                placeholderVehicleImage
+                            @unknown default:
+                                placeholderVehicleImage
+                            }
+                        }
+                    } else {
+                        placeholderVehicleImage
                     }
+                }
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .padding(16)
         .background(AppColors.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-  
+    private func refreshActiveVehicleImage() {
+        activeVehicleImage = Base64ImageStorage.decode(activeVehicle?.photoBase64)
+    }
+
+    private var placeholderVehicleImage: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color(red: 0.12, green: 0.15, blue: 0.18))
+                .frame(height: 160)
+                .overlay {
+                    LinearGradient(
+                        colors: [
+                            Color.cyan.opacity(0.1),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+
+            Image(systemName: "car.fill")
+                .font(.system(size: 42))
+                .foregroundStyle(AppColors.accent)
+                .padding(.bottom, 20)
+        }
+    }
 
     private var addVehicleButton: some View {
         Button {
@@ -259,19 +332,25 @@ struct GarageView: View {
     private func deleteSelectedVehicle() {
         guard let vehicle = vehicleToDelete else { return }
 
-        vehicles.removeAll { $0.id == vehicle.id }
-
-        if selectedVehicleID == vehicle.id {
-            selectedVehicleID = vehicles.first?.id
+        viewModel.deleteVehicle(vehicle) { error in
+            if error == nil {
+                if selectedVehicleID == vehicle.id {
+                    selectedVehicleID = viewModel.vehicles.first?.id
+                }
+                vehicleToDelete = nil
+                onVehicleChanged?()
+                snackBarManager.show("Vehicle deleted successfully", isSuccess: true)
+            } else {
+                snackBarManager.show(error ?? "Unable to delete vehicle", isSuccess: false)
+            }
         }
-
-        vehicleToDelete = nil
     }
 
-   
-
     private var statsGridSection: some View {
-        LazyVGrid(
+        let revenueLicenseStatus = expiryStatus(for: activeVehicle?.licenseExpiry)
+        let insuranceStatus = expiryStatus(for: activeVehicle?.insuranceExpiry)
+
+        return LazyVGrid(
             columns: [
                 GridItem(.flexible(), spacing: 12),
                 GridItem(.flexible(), spacing: 12)
@@ -280,8 +359,8 @@ struct GarageView: View {
         ) {
             StatCard(
                 title: "ODOMETER",
-                value: "128,642 km",
-                subtitle: "Next service • 132,000 km"
+                value: "\(activeVehicle?.odometerReading ?? "0") km",
+                subtitle: activeVehicle != nil ? "Current reading" : "No vehicle available"
             )
 
             StatCard(
@@ -293,21 +372,42 @@ struct GarageView: View {
 
             StatCard(
                 title: "REVENUE LICENSE",
-                value: "87 days",
-                subtitle: "Until expiration",
-                valueColor: .green
+                value: revenueLicenseStatus.value,
+                subtitle: revenueLicenseStatus.subtitle,
+                valueColor: revenueLicenseStatus.color
             )
 
             StatCard(
                 title: "INSURANCE",
-                value: "42 days",
-                subtitle: "Until expiration",
-                valueColor: .green
+                value: insuranceStatus.value,
+                subtitle: insuranceStatus.subtitle,
+                valueColor: insuranceStatus.color
             )
         }
     }
 
+    private func expiryStatus(for dateString: String?) -> (value: String, subtitle: String, color: Color) {
+        guard let dateString, !dateString.isEmpty else {
+            return ("N/A", "No expiry date", .gray)
+        }
 
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        guard let date = formatter.date(from: dateString) else {
+            return ("N/A", "Invalid date", .gray)
+        }
+
+        let now = Date()
+
+        if date < now {
+            let overdueDays = max(1, Int(abs(date.timeIntervalSince(now)) / 86400))
+            return ("Expired", "Expired \(overdueDays) day\(overdueDays == 1 ? "" : "s") ago", .red)
+        }
+
+        let remainingDays = max(0, Int(date.timeIntervalSince(now) / 86400))
+        return ("\(remainingDays) days", "Until expiration", remainingDays <= 30 ? .orange : .green)
+    }
 
     private var dtcAlertBanner: some View {
         HStack(spacing: 12) {
@@ -330,8 +430,6 @@ struct GarageView: View {
                 .stroke(Color.orange.opacity(0.5), lineWidth: 1)
         }
     }
-
-  
 
     private var maintenanceExpensesCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -372,8 +470,6 @@ struct GarageView: View {
             .frame(width: 28, height: height)
     }
 
-  
-
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("QUICK ACTIONS")
@@ -402,6 +498,20 @@ struct GarageView: View {
                     bg: Color.green.opacity(0.2),
                     fg: .green
                 )
+            }
+        }
+    }
+    
+    private func loadProfilePhoto() {
+        authService.fetchUserProfile { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let profile):
+                    profilePhotoBase64 = profile.profilePhotoBase64 ?? ""
+
+                case .failure(let error):
+                    print("Failed to load profile picture: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -435,5 +545,7 @@ struct GarageView: View {
 #Preview {
     NavigationStack {
         GarageView()
+            .environmentObject(SnackBarManager())
+            .environmentObject(AuthService())
     }
 }

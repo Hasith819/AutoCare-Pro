@@ -1,36 +1,58 @@
 
 
 import SwiftUI
+import PhotosUI
 
 struct AddVehicleView: View {
 
     let vehicle: Vehicle?
+    let availableBrands: [VehicleBrand]
     let onSave: (Vehicle) -> Void
 
     @State private var brand: String
     @State private var model: String
     @State private var registrationNumber: String
     @State private var chassisNumber: String
-    @State private var licenseExpiry: String
-    @State private var insuranceExpiry: String
+    @State private var licenseExpiryDate: Date
+    @State private var insuranceExpiryDate: Date
     @State private var odometerReading: String
+    @State private var vehiclePhotoBase64: String
+    @State private var selectedVehiclePhoto: PhotosPickerItem?
 
     @State private var showValidationError = false
 
+    private var availableModels: [String] {
+        availableBrands.first { $0.name == brand }?.models ?? []
+    }
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     init(
         vehicle: Vehicle? = nil,
+        availableBrands: [VehicleBrand] = [],
         onSave: @escaping (Vehicle) -> Void
     ) {
         self.vehicle = vehicle
+        self.availableBrands = availableBrands
         self.onSave = onSave
 
-        _brand = State(initialValue: vehicle?.brand ?? "")
-        _model = State(initialValue: vehicle?.model ?? "")
+        let initialBrand = vehicle?.brand ?? ""
+        let initialModel = vehicle?.model ?? ""
+        let initialLicenseDate = Self.parseDate(vehicle?.licenseExpiry) ?? Date()
+        let initialInsuranceDate = Self.parseDate(vehicle?.insuranceExpiry) ?? Date().addingTimeInterval(30 * 24 * 60 * 60)
+
+        _brand = State(initialValue: initialBrand)
+        _model = State(initialValue: initialModel)
         _registrationNumber = State(initialValue: vehicle?.registrationNumber ?? "")
         _chassisNumber = State(initialValue: vehicle?.chassisNumber ?? "")
-        _licenseExpiry = State(initialValue: vehicle?.licenseExpiry ?? "")
-        _insuranceExpiry = State(initialValue: vehicle?.insuranceExpiry ?? "")
+        _licenseExpiryDate = State(initialValue: initialLicenseDate)
+        _insuranceExpiryDate = State(initialValue: initialInsuranceDate)
         _odometerReading = State(initialValue: vehicle?.odometerReading ?? "")
+        _vehiclePhotoBase64 = State(initialValue: vehicle?.photoBase64 ?? vehicle?.photoURL ?? "")
     }
 
     var body: some View {
@@ -41,7 +63,7 @@ struct AddVehicleView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(vehicle == nil ? "Vehicle Information" : "Edit Vehicle")
+                        Text(vehicle == nil ? "Add Vehicle" : "Update Vehicle")
                             .font(.system(size: 26, weight: .bold, design: .rounded))
                             .foregroundStyle(AppColors.primaryText)
 
@@ -55,18 +77,21 @@ struct AddVehicleView: View {
 
                     settingsSection(title: "BASIC INFORMATION") {
                         VStack(spacing: 0) {
-                            inputField(
+                            dropdownField(
                                 title: "Brand",
-                                placeholder: "e.g. Toyota",
-                                text: $brand
+                                placeholder: "Select brand",
+                                selection: $brand,
+                                options: availableBrands.map(\.name)
                             )
 
                             fieldDivider
 
-                            inputField(
+                            dropdownField(
                                 title: "Model",
-                                placeholder: "e.g. Allion",
-                                text: $model
+                                placeholder: "Select model",
+                                selection: $model,
+                                options: availableModels,
+                                isDisabled: availableModels.isEmpty
                             )
 
                             fieldDivider
@@ -89,18 +114,16 @@ struct AddVehicleView: View {
 
                     settingsSection(title: "DOCUMENT DETAILS") {
                         VStack(spacing: 0) {
-                            inputField(
+                            dateField(
                                 title: "Revenue License Expiry",
-                                placeholder: "e.g. 30 Nov 2026",
-                                text: $licenseExpiry
+                                date: $licenseExpiryDate
                             )
 
                             fieldDivider
 
-                            inputField(
+                            dateField(
                                 title: "Insurance Expiry",
-                                placeholder: "e.g. 08 Dec 2026",
-                                text: $insuranceExpiry
+                                date: $insuranceExpiryDate
                             )
                         }
                     }
@@ -112,28 +135,38 @@ struct AddVehicleView: View {
                             text: $odometerReading,
                             keyboardType: .numberPad
                         )
+                        .onChange(of: odometerReading) { _, newValue in
+                            let filtered = newValue.filter { $0.isNumber }
+                            if filtered != newValue {
+                                odometerReading = filtered
+                            }
+                        }
                     }
 
                     settingsSection(title: "VEHICLE PHOTO") {
-                        Button(action: {
-
-                        }) {
+                        PhotosPicker(selection: $selectedVehiclePhoto, matching: .images) {
                             HStack(spacing: 14) {
-                                Image(systemName: "camera.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(AppColors.accent)
-                                    .frame(width: 48, height: 48)
-                                    .background(AppColors.buttonBackground)
-                                    .clipShape(
-                                        RoundedRectangle(cornerRadius: 12)
-                                    )
+                                if let photoImage = Base64ImageStorage.decode(vehiclePhotoBase64) {
+                                    Image(uiImage: photoImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 48, height: 48)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                } else {
+                                    Image(systemName: "camera.fill")
+                                        .font(.title2)
+                                        .foregroundStyle(AppColors.accent)
+                                        .frame(width: 48, height: 48)
+                                        .background(AppColors.buttonBackground)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Upload Vehicle Photo")
+                                    Text(vehiclePhotoBase64.isEmpty ? "Upload Vehicle Photo" : "Vehicle Photo Selected")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(AppColors.primaryText)
 
-                                    Text("Choose from camera or photo library")
+                                    Text("Choose from photo library")
                                         .font(.caption)
                                         .foregroundStyle(AppColors.secondaryLabel)
                                 }
@@ -148,6 +181,19 @@ struct AddVehicleView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .onChange(of: selectedVehiclePhoto) { _, newItem in
+                            guard let newItem else { return }
+
+                            Task {
+                                if let data = try? await newItem.loadTransferable(type: Data.self),
+                                   let image = UIImage(data: data),
+                                   let encoded = Base64ImageStorage.encode(image) {
+                                    await MainActor.run {
+                                        vehiclePhotoBase64 = encoded
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Button(action: saveVehicle) {
@@ -173,7 +219,16 @@ struct AddVehicleView: View {
                 .padding(.vertical, 12)
             }
         }
-        .navigationTitle(vehicle == nil ? "Add Vehicle" : "Edit Vehicle")
+        .onAppear {
+            if brand.isEmpty, let firstBrand = availableBrands.first?.name {
+                brand = firstBrand
+            }
+
+            if model.isEmpty, let firstModel = availableModels.first {
+                model = firstModel
+            }
+        }
+        .navigationTitle(vehicle == nil ? "Add Vehicle" : "Update Vehicle")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(AppColors.background, for: .navigationBar)
@@ -182,7 +237,7 @@ struct AddVehicleView: View {
         .alert("Missing Information", isPresented: $showValidationError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Please enter the vehicle brand, model, and registration number.")
+            Text("Please enter the vehicle brand, model, registration number, and a valid odometer reading.")
         }
     }
 
@@ -190,26 +245,80 @@ struct AddVehicleView: View {
         let cleanBrand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanRegistration = registrationNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanOdometer = odometerReading.filter { $0.isNumber }
 
         guard !cleanBrand.isEmpty,
               !cleanModel.isEmpty,
-              !cleanRegistration.isEmpty else {
+              !cleanRegistration.isEmpty,
+              !cleanOdometer.isEmpty else {
             showValidationError = true
             return
         }
 
         let savedVehicle = Vehicle(
             id: vehicle?.id ?? UUID(),
+            documentID: vehicle?.documentID,
             brand: cleanBrand,
             model: cleanModel,
             registrationNumber: cleanRegistration,
             chassisNumber: chassisNumber.trimmingCharacters(in: .whitespacesAndNewlines),
-            licenseExpiry: licenseExpiry.trimmingCharacters(in: .whitespacesAndNewlines),
-            insuranceExpiry: insuranceExpiry.trimmingCharacters(in: .whitespacesAndNewlines),
-            odometerReading: odometerReading.trimmingCharacters(in: .whitespacesAndNewlines)
+            licenseExpiry: dateFormatter.string(from: licenseExpiryDate),
+            insuranceExpiry: dateFormatter.string(from: insuranceExpiryDate),
+            odometerReading: cleanOdometer,
+            photoBase64: vehiclePhotoBase64.isEmpty ? nil : vehiclePhotoBase64,
+            photoURL: vehicle?.photoURL,
+            createdAt: vehicle?.createdAt ?? Date(),
+            updatedAt: Date()
         )
 
         onSave(savedVehicle)
+    }
+
+    private func dropdownField(
+        title: String,
+        placeholder: String,
+        selection: Binding<String>,
+        options: [String],
+        isDisabled: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(AppColors.secondaryLabel)
+
+            Picker(title, selection: selection) {
+                if selection.wrappedValue.isEmpty {
+                    Text(placeholder).tag("")
+                }
+
+                ForEach(options, id: \.self) { option in
+                    Text(option).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(AppColors.primaryText)
+            .disabled(isDisabled)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func dateField(title: String, date: Binding<Date>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(AppColors.secondaryLabel)
+
+            DatePicker(
+                "",
+                selection: date,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.compact)
+            .tint(AppColors.accent)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func settingsSection<Content: View>(
@@ -254,6 +363,14 @@ struct AddVehicleView: View {
         Divider()
             .overlay(AppColors.secondaryLabel.opacity(0.2))
             .padding(.leading, 16)
+    }
+
+    private static func parseDate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: value)
     }
 }
 

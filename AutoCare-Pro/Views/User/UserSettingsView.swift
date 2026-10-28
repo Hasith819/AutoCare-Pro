@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct UserSettingsView: View {
 
@@ -15,6 +16,8 @@ struct UserSettingsView: View {
     @State private var name = ""
     @State private var email = ""
     @State private var phone = ""
+    @State private var profilePhotoBase64 = ""
+    @State private var selectedProfileItem: PhotosPickerItem?
 
     @State private var faceIdEnabled = true
     @State private var notificationsEnabled = true
@@ -249,9 +252,35 @@ struct UserSettingsView: View {
 
     private var profileHeader: some View {
         VStack(spacing: 12) {
-            Image(systemName: "person.circle.fill")
-                .font(.system(size: 70))
-                .foregroundStyle(AppColors.accent)
+            PhotosPicker(selection: $selectedProfileItem, matching: .images) {
+                ZStack {
+                    if let profileImage = Base64ImageStorage.decode(profilePhotoBase64) {
+                        Image(uiImage: profileImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 90, height: 90)
+                            .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 70))
+                            .foregroundStyle(AppColors.accent)
+                            .frame(width: 90, height: 90)
+                    }
+                }
+            }
+            .onChange(of: selectedProfileItem) { _, newItem in
+                guard let newItem else { return }
+
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data),
+                       let encoded = Base64ImageStorage.encode(image) {
+                        await MainActor.run {
+                            profilePhotoBase64 = encoded
+                        }
+                    }
+                }
+            }
 
             Text(name.isEmpty ? "Your Profile" : name)
                 .font(.title3)
@@ -316,6 +345,7 @@ struct UserSettingsView: View {
                     name = profile.fullName
                     email = profile.email
                     phone = profile.phoneNumber
+                    profilePhotoBase64 = profile.profilePhotoBase64 ?? ""
 
                 case .failure(let error):
                     message = "Could not load your profile: \(error.localizedDescription)"
@@ -333,7 +363,8 @@ struct UserSettingsView: View {
 
         authService.updateUserProfile(
             fullName: name,
-            phoneNumber: phone
+            phoneNumber: phone,
+            profilePhotoBase64: profilePhotoBase64.isEmpty ? nil : profilePhotoBase64
         ) { error in
             DispatchQueue.main.async {
                 isSaving = false
