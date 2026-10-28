@@ -4,7 +4,6 @@
 //
 //  Created by Student4 on 2026-10-26.
 //
-
 import SwiftUI
 import MapKit
 import CoreLocation
@@ -22,14 +21,26 @@ struct MapView: View {
             AppColors.background
                 .ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
-                    header
-                    filterButtons
-                    mapSection
-                    resultsSection
+            VStack(spacing: 0) {
+              
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 16)
+                    .background(AppColors.background)
+
+        
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        filterButtons
+                        mapSection
+                        resultsSection
+
+                        Spacer()
+                            .frame(height: 30)
+                    }
+                    .padding(.vertical, 16)
                 }
-                .padding(.vertical, 16)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -61,7 +72,7 @@ struct MapView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Find Nearby Services")
-                .font(AppFonts.heading)
+                .font(AppFonts.title2)
                 .fontWeight(.bold)
                 .foregroundStyle(AppColors.primaryText)
 
@@ -69,7 +80,7 @@ struct MapView: View {
                 .font(AppFonts.body)
                 .foregroundStyle(AppColors.secondaryLabel)
         }
-        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var filterButtons: some View {
@@ -210,7 +221,6 @@ struct MapView: View {
         _ center: ServiceCenter
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: center.type.icon)
                     .font(.title3)

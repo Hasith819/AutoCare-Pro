@@ -20,4 +20,6 @@ enum AppFonts {
     static let label = Font.caption
     static let button = Font.headline
     static let footer = Font.footnote
+    
+    static let title2 = Font.system(size: 30, weight: .bold)
 }

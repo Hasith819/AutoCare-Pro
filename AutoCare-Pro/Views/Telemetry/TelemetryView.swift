@@ -4,7 +4,6 @@
 //
 //  Created by Student4 on 2026-10-26.
 //
-
 import SwiftUI
 
 struct TelemetryView: View {
@@ -27,7 +26,6 @@ struct TelemetryView: View {
         String(format: "%.2f km", telemetry.tripDistanceKm)
     }
 
-
     private var allDiagnosticCodes: [DTCCode] {
         telemetry.storedCodes
         + telemetry.pendingCodes
@@ -35,19 +33,38 @@ struct TelemetryView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                headerSection
-                connectionSection
-                speedSection
-                metricsSection
-                diagnosticSection
+        ZStack {
+            AppColors.background
+                .ignoresSafeArea()
 
-                if let reason = telemetry.ecuErrorReason {
-                    errorSection(reason)
+            VStack(spacing: 0) {
+
+                // Fixed header
+                headerSection
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 16)
+                    .background(AppColors.background)
+
+                // Scrollable telemetry content
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
+                        connectionSection
+                        speedSection
+                        metricsSection
+                        diagnosticSection
+
+                        if let reason = telemetry.ecuErrorReason {
+                            errorSection(reason)
+                        }
+
+                        Spacer()
+                            .frame(height: 30)
+                    }
+                    .padding(20)
+                    .padding(.top, 0)
                 }
             }
-            .padding(20)
         }
         .background(AppColors.background.ignoresSafeArea())
         .preferredColorScheme(.dark)
@@ -55,12 +72,10 @@ struct TelemetryView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Header
-
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Live Telemetry")
-                .font(.system(size: 30, weight: .bold))
+                .font(AppFonts.title2)
                 .foregroundStyle(AppColors.primaryText)
 
             Text("Monitor your vehicle's live engine data.")
@@ -69,8 +84,6 @@ struct TelemetryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    // MARK: - Connection
 
     private var connectionSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -128,8 +141,6 @@ struct TelemetryView: View {
         .background(AppColors.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
-
-    // MARK: - Speed
 
     private var speedSection: some View {
         VStack(spacing: 14) {
@@ -197,8 +208,6 @@ struct TelemetryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    // MARK: - Engine Metrics
-
     private var metricsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle("Engine Metrics")
@@ -257,9 +266,6 @@ struct TelemetryView: View {
 
         return AppColors.accent
     }
-
-
-    // MARK: - DTC Fault Diagnostic Scanner
 
     private var diagnosticSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -342,8 +348,6 @@ struct TelemetryView: View {
         }
     }
 
-    // MARK: - DTC Fault Codes
-
     @ViewBuilder
     private var dtcCodesSection: some View {
         if allDiagnosticCodes.isEmpty {
@@ -372,7 +376,10 @@ struct TelemetryView: View {
 
         } else {
             VStack(spacing: 14) {
-                ForEach(Array(allDiagnosticCodes.enumerated()), id: \.offset) { _, code in
+                ForEach(
+                    Array(allDiagnosticCodes.enumerated()),
+                    id: \.offset
+                ) { _, code in
                     dtcCard(code)
                 }
             }
@@ -444,8 +451,6 @@ struct TelemetryView: View {
         }
     }
 
-    // MARK: - Error
-
     private func errorSection(_ reason: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(
@@ -465,8 +470,6 @@ struct TelemetryView: View {
         .background(AppColors.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
-
-    // MARK: - Helpers
 
     private func sectionTitle(_ title: String) -> some View {
         Text(title)

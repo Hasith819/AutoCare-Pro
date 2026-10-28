@@ -51,4 +51,6 @@ struct AppTabShellView: View {
 
 #Preview {
     AppTabShellView()
+        .environmentObject(AuthService())
+        .environmentObject(SnackBarManager())
 }
