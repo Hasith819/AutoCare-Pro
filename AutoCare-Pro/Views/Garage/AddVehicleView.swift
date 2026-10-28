@@ -1,15 +1,37 @@
 
+
 import SwiftUI
 
 struct AddVehicleView: View {
 
-    @State private var brand = ""
-    @State private var model = ""
-    @State private var registrationNumber = ""
-    @State private var chassisNumber = ""
-    @State private var licenseExpiry = ""
-    @State private var insuranceExpiry = ""
-    @State private var odometerReading = ""
+    let vehicle: Vehicle?
+    let onSave: (Vehicle) -> Void
+
+    @State private var brand: String
+    @State private var model: String
+    @State private var registrationNumber: String
+    @State private var chassisNumber: String
+    @State private var licenseExpiry: String
+    @State private var insuranceExpiry: String
+    @State private var odometerReading: String
+
+    @State private var showValidationError = false
+
+    init(
+        vehicle: Vehicle? = nil,
+        onSave: @escaping (Vehicle) -> Void
+    ) {
+        self.vehicle = vehicle
+        self.onSave = onSave
+
+        _brand = State(initialValue: vehicle?.brand ?? "")
+        _model = State(initialValue: vehicle?.model ?? "")
+        _registrationNumber = State(initialValue: vehicle?.registrationNumber ?? "")
+        _chassisNumber = State(initialValue: vehicle?.chassisNumber ?? "")
+        _licenseExpiry = State(initialValue: vehicle?.licenseExpiry ?? "")
+        _insuranceExpiry = State(initialValue: vehicle?.insuranceExpiry ?? "")
+        _odometerReading = State(initialValue: vehicle?.odometerReading ?? "")
+    }
 
     var body: some View {
         ZStack {
@@ -18,21 +40,18 @@ struct AddVehicleView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
-
-             
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Vehicle Information")
+                        Text(vehicle == nil ? "Vehicle Information" : "Edit Vehicle")
                             .font(.system(size: 26, weight: .bold, design: .rounded))
                             .foregroundStyle(AppColors.primaryText)
 
-                        Text("Enter your vehicle details to add it to your garage.")
+                        Text("Enter your vehicle details.")
                             .font(AppFonts.body)
                             .foregroundStyle(AppColors.secondaryLabel)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-
 
                     settingsSection(title: "BASIC INFORMATION") {
                         VStack(spacing: 0) {
@@ -68,7 +87,6 @@ struct AddVehicleView: View {
                         }
                     }
 
-     
                     settingsSection(title: "DOCUMENT DETAILS") {
                         VStack(spacing: 0) {
                             inputField(
@@ -87,7 +105,6 @@ struct AddVehicleView: View {
                         }
                     }
 
-      
                     settingsSection(title: "VEHICLE STATUS") {
                         inputField(
                             title: "Odometer Reading (km)",
@@ -96,7 +113,6 @@ struct AddVehicleView: View {
                             keyboardType: .numberPad
                         )
                     }
-
 
                     settingsSection(title: "VEHICLE PHOTO") {
                         Button(action: {
@@ -108,7 +124,9 @@ struct AddVehicleView: View {
                                     .foregroundStyle(AppColors.accent)
                                     .frame(width: 48, height: 48)
                                     .background(AppColors.buttonBackground)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .clipShape(
+                                        RoundedRectangle(cornerRadius: 12)
+                                    )
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Upload Vehicle Photo")
@@ -132,21 +150,67 @@ struct AddVehicleView: View {
                         .buttonStyle(.plain)
                     }
 
+                    Button(action: saveVehicle) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+
+                            Text(vehicle == nil ? "Save Vehicle" : "Update Vehicle")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(AppColors.background)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(AppColors.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 20)
+
                     Spacer()
                         .frame(height: 24)
                 }
                 .padding(.vertical, 12)
             }
         }
-        .navigationTitle("Add Vehicle")
+        .navigationTitle(vehicle == nil ? "Add Vehicle" : "Edit Vehicle")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(AppColors.background, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .preferredColorScheme(.dark)
+        .alert("Missing Information", isPresented: $showValidationError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please enter the vehicle brand, model, and registration number.")
+        }
     }
 
+    private func saveVehicle() {
+        let cleanBrand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanRegistration = registrationNumber.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        guard !cleanBrand.isEmpty,
+              !cleanModel.isEmpty,
+              !cleanRegistration.isEmpty else {
+            showValidationError = true
+            return
+        }
+
+        let savedVehicle = Vehicle(
+            id: vehicle?.id ?? UUID(),
+            brand: cleanBrand,
+            model: cleanModel,
+            registrationNumber: cleanRegistration,
+            chassisNumber: chassisNumber.trimmingCharacters(in: .whitespacesAndNewlines),
+            licenseExpiry: licenseExpiry.trimmingCharacters(in: .whitespacesAndNewlines),
+            insuranceExpiry: insuranceExpiry.trimmingCharacters(in: .whitespacesAndNewlines),
+            odometerReading: odometerReading.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+
+        onSave(savedVehicle)
+    }
 
     private func settingsSection<Content: View>(
         title: String,
@@ -164,8 +228,6 @@ struct AddVehicleView: View {
         }
         .padding(.horizontal, 20)
     }
-
-
 
     private func inputField(
         title: String,
@@ -197,6 +259,8 @@ struct AddVehicleView: View {
 
 #Preview {
     NavigationStack {
-        AddVehicleView()
+        AddVehicleView { vehicle in
+            print(vehicle.displayName)
+        }
     }
 }

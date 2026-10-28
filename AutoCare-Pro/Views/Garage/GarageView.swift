@@ -10,7 +10,30 @@ import SwiftUI
 struct GarageView: View {
 
     @State private var showUserSettings = false
-    @State private var showAddVehicle = false
+    @State private var showVehicleForm = false
+    @State private var showVehicleDropdown = false
+    @State private var showDeleteConfirmation = false
+
+    @State private var editingVehicle: Vehicle?
+    @State private var vehicleToDelete: Vehicle?
+
+    @State private var vehicles: [Vehicle] = [
+        Vehicle(
+            brand: "Toyota",
+            model: "Allion",
+            registrationNumber: "KN 2426",
+            chassisNumber: "",
+            licenseExpiry: "",
+            insuranceExpiry: "",
+            odometerReading: "128642"
+        )
+    ]
+
+    @State private var selectedVehicleID: UUID?
+
+    private var activeVehicle: Vehicle? {
+        vehicles.first { $0.id == selectedVehicleID } ?? vehicles.first
+    }
 
     var body: some View {
         ZStack {
@@ -24,6 +47,29 @@ struct GarageView: View {
                         .padding(.top, 10)
 
                     activeVehicleCard
+                        .padding(.horizontal, 20)
+
+                    if showVehicleDropdown {
+                        VehicleDropdownView(
+                            vehicles: vehicles,
+                            selectedVehicleID: activeVehicle?.id,
+                            onSelect: { vehicle in
+                                selectedVehicleID = vehicle.id
+                                showVehicleDropdown = false
+                            },
+                            onEdit: { vehicle in
+                                editingVehicle = vehicle
+                                showVehicleForm = true
+                            },
+                            onDelete: { vehicle in
+                                vehicleToDelete = vehicle
+                                showDeleteConfirmation = true
+                            }
+                        )
+                        .padding(.horizontal, 20)
+                    }
+
+                    addVehicleButton
                         .padding(.horizontal, 20)
 
                     statsGridSection
@@ -46,30 +92,52 @@ struct GarageView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
+
         .sheet(isPresented: $showUserSettings) {
             UserSettingsView()
         }
-        .sheet(isPresented: $showAddVehicle) {
-            NavigationStack {
-                AddVehicleView()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Cancel") {
-                                showAddVehicle = false
-                            }
-                            .foregroundStyle(AppColors.secondaryLabel)
-                        }
 
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") {
-                                showAddVehicle = false
-                            }
-                            .fontWeight(.semibold)
-                            .foregroundStyle(AppColors.accent)
-                        }
+        .sheet(isPresented: $showVehicleForm, onDismiss: {
+            editingVehicle = nil
+        }) {
+            NavigationStack {
+                AddVehicleView(vehicle: editingVehicle) { savedVehicle in
+                    if let index = vehicles.firstIndex(where: {
+                        $0.id == savedVehicle.id
+                    }) {
+                        vehicles[index] = savedVehicle
+                    } else {
+                        vehicles.append(savedVehicle)
                     }
+
+                    selectedVehicleID = savedVehicle.id
+                    showVehicleForm = false
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") {
+                            showVehicleForm = false
+                        }
+                        .foregroundStyle(AppColors.secondaryLabel)
+                    }
+                }
             }
             .preferredColorScheme(.dark)
+        }
+
+        .alert(
+            "Delete vehicle?",
+            isPresented: $showDeleteConfirmation
+        ) {
+            Button("Cancel", role: .cancel) {
+                vehicleToDelete = nil
+            }
+
+            Button("Delete", role: .destructive) {
+                deleteSelectedVehicle()
+            }
+        } message: {
+            Text("This vehicle will be removed from your garage.")
         }
     }
 
@@ -82,7 +150,7 @@ struct GarageView: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(AppColors.primaryText)
 
-                Text("Your garage • protected with Face ID")
+                Text("See your all vehicle status")
                     .font(AppFonts.footer)
                     .foregroundStyle(AppColors.secondaryLabel)
             }
@@ -100,52 +168,49 @@ struct GarageView: View {
         }
     }
 
+   
 
     private var activeVehicleCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("ACTIVE GARAGE")
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showVehicleDropdown.toggle()
+                }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 6) {
+                            Text("ACTIVE GARAGE")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(AppColors.accent)
+
+                            Image(
+                                systemName: showVehicleDropdown
+                                    ? "chevron.up"
+                                    : "chevron.down"
+                            )
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundStyle(AppColors.accent)
+                        }
 
-                        Image(systemName: "chevron.down")
-                            .font(.caption2)
+                        Text(activeVehicle?.displayName ?? "No vehicle selected")
+                            .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundStyle(AppColors.accent)
+                            .foregroundStyle(AppColors.primaryText)
+                            .multilineTextAlignment(.leading)
+
+                        Text("Owner: Pubudu Hasith")
+                            .font(.caption2)
+                            .foregroundStyle(AppColors.secondaryLabel)
                     }
 
-                    Text("Toyota Allion • KN 2426")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(AppColors.primaryText)
-
-                    Text("Owner: Pubudu Hasith")
-                        .font(.caption2)
-                        .foregroundStyle(AppColors.secondaryLabel)
+                    Spacer()
                 }
-
-                Spacer()
-
-                Button {
-                    showAddVehicle = true
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Vehicle")
-                    }
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppColors.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(AppColors.buttonBackground)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
             ZStack(alignment: .bottomLeading) {
                 Rectangle()
@@ -169,7 +234,41 @@ struct GarageView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
+  
 
+    private var addVehicleButton: some View {
+        Button {
+            editingVehicle = nil
+            showVehicleForm = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                Text("Add new Vehicle")
+                    .fontWeight(.semibold)
+            }
+            .font(.subheadline)
+            .foregroundStyle(AppColors.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppColors.buttonBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func deleteSelectedVehicle() {
+        guard let vehicle = vehicleToDelete else { return }
+
+        vehicles.removeAll { $0.id == vehicle.id }
+
+        if selectedVehicleID == vehicle.id {
+            selectedVehicleID = vehicles.first?.id
+        }
+
+        vehicleToDelete = nil
+    }
+
+   
 
     private var statsGridSection: some View {
         LazyVGrid(
@@ -209,6 +308,7 @@ struct GarageView: View {
     }
 
 
+
     private var dtcAlertBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.circle.fill")
@@ -231,6 +331,7 @@ struct GarageView: View {
         }
     }
 
+  
 
     private var maintenanceExpensesCard: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -271,7 +372,7 @@ struct GarageView: View {
             .frame(width: 28, height: height)
     }
 
-
+  
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
